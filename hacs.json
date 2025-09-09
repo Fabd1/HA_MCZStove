@@ -1,0 +1,7 @@
+{
+  "name": "MCZ Stove",
+  "domain": "mcz",
+  "homeassistant": "2023.12.0",
+  "country": "FR",
+  "render_readme": true
+}

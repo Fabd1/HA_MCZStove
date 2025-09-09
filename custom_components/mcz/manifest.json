@@ -1,0 +1,9 @@
+{
+  "domain": "mcz",
+  "name": "MCZ Stove",
+  "version": "0.0.1",
+  "documentation": "https://github.com/ton-nom-utilisateur/mcz-stove-homeassistant",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [""]
+}

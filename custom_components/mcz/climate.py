@@ -1,5 +1,5 @@
 from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import HVACMode, ClimateEntityFeature
+from homeassistant.components.climate.const import HVACMode, ClimateEntityFeature, HVACAction
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -7,7 +7,16 @@ from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
 
 
 from .const import DOMAIN
-from .device import MczStove
+from .device import MczStove, StoveState  
+
+
+ACTION_MAP = {
+    StoveState.OFF: HVACAction.OFF,
+    StoveState.STARTUP: HVACAction.PREHEATING,
+    StoveState.HEATING: HVACAction.HEATING,
+    StoveState.IDLE: HVACAction.IDLE, 
+    StoveState.SHUTDOWN: HVACAction.OFF,  # ou PREHEATING si tu veux montrer un "cooldown"
+}
 
 
 async def async_setup_entry(
@@ -23,13 +32,14 @@ async def async_setup_entry(
 class MczClimate(ClimateEntity):
     """ClimateEntity pour un poêle MCZ."""
 
-    PRESET_MODES = ["eco", "comfort", "sleep"]
+    PRESET_MODES = ["eco", "comfort", "sleep", "away", "boost"]
 
     def __init__(self, stove: MczStove):
         self._stove = stove
         self._attr_name = stove.name
         self._attr_unique_id = stove.id
-        self._attr_preset_modes = self.PRESET_MODES  # <-- important
+        self._attr_preset_modes = self.PRESET_MODES 
+        self._attr_preset_mode = None  # état initial
 
 
 
@@ -47,15 +57,25 @@ class MczClimate(ClimateEntity):
 
     @property
     def hvac_mode(self):
-        return HVACMode.HEAT if self._stove.is_on else HVACMode.OFF
+        if not self._stove.is_on:
+            return HVACMode.OFF
+        if self._stove.is_auto:  # <-- tu dois exposer un attribut .is_auto dans MczStove
+            return HVACMode.AUTO
+        return HVACMode.HEAT
+        """return HVACMode.HEAT if self._stove.is_on else HVACMode.OFF"""
 
     @property
     def hvac_modes(self):
-        return [HVACMode.HEAT, HVACMode.OFF]
+        return [HVACMode.HEAT, HVACMode.AUTO, HVACMode.OFF]
 
     @property
     def preset_modes(self):
         return self._attr_preset_modes
+
+    @property
+    def hvac_action(self):
+        return ACTION_MAP.get(self._stove.state, HVACAction.OFF)
+
 
     @property
     def preset_mode(self):
@@ -71,15 +91,20 @@ class MczClimate(ClimateEntity):
             self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode):
-        if hvac_mode == HVACMode.HEAT:
-            await self._stove.async_turn_on()
-        else:
+        if hvac_mode == HVACMode.OFF:
             await self._stove.async_turn_off()
+        elif hvac_mode == HVACMode.HEAT:
+            await self._stove.async_turn_on()
+            await self._stove.async_set_manual()
+        elif hvac_mode == HVACMode.AUTO:
+            await self._stove.async_turn_on()
+            await self._stove.async_set_auto()
         self.async_write_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str):
         if preset_mode in self._attr_preset_modes:
             await self._stove.async_set_mode(preset_mode)
+            self._attr_preset_mode = preset_mode
             self.async_write_ha_state()
 
     @property

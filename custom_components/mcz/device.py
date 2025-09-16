@@ -14,7 +14,8 @@ class StoveState(Enum):
     OFF = 0
     STARTUP = 1
     HEATING = 2
-    SHUTDOWN = 3
+    IDLE = 3
+    SHUTDOWN = 4
 
 class MczStove:
     """Représente un poêle MCZ contrôlé via son ID."""   
@@ -71,6 +72,16 @@ class MczStove:
     @property
     def target_temperature(self) -> float:
         return self._target_temp
+
+    @property
+    def mode(self):
+        """Retourne le mode courant sous forme de preset."""
+        mapping = {0: "off", 1: "manual", 2: "auto", 3: "eco", 4: "comfort", 5: "sleep", 6: "away", 7: "boost"}
+        return mapping.get(self._mode, "manual")
+    
+    @property
+    def is_auto(self) -> bool:   # <-- ajouté pour Climate
+        return self._mode == 2
 
     @property
     def is_on(self) -> bool:
@@ -241,8 +252,10 @@ class MczStove:
     async def async_set_mode(self, mode: str):
         mapping = {
             "eco": 3,
-            "comfort": 2,
-            "sleep": 1,
+            "comfort": 4,
+            "sleep": 5,
+            "away": 6,     # <-- ajouté
+            "boost": 7,    # <-- ajouté
         }
         if mode in mapping:
             self._mode = mapping[mode]
@@ -253,6 +266,10 @@ class MczStove:
                 self._target_temp = 21
             elif mode == "sleep":
                 self._target_temp = 18
+            elif mode == "away":
+                self._target_temp = 16
+            elif mode == "boost":
+                self._target_temp = 23
         else:
             _LOGGER.warning("Mode inconnu: %s", mode)
 
@@ -281,3 +298,13 @@ class MczStove:
         """Active ou désactive le beep."""
         _LOGGER.debug("Envoi beep=%s pour %s", on, self._device_id)
         self._beep = on
+    
+    async def async_set_manual(self):  # <-- ajouté
+        self._mode = 1
+        _LOGGER.debug("Mode manuel activé pour %s", self._device_id)
+        await self._send_frame()
+
+    async def async_set_auto(self):  # <-- ajouté
+        self._mode = 2
+        _LOGGER.debug("Mode auto activé pour %s", self._device_id)
+        await self._send_frame()
